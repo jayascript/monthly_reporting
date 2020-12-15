@@ -4,19 +4,30 @@ import csv
 import sys
 import subprocess
 
+import numpy as np
 import pandas as pd
 
 from pathlib import Path
+from decouple import config
 from tabulate import tabulate
 
 
 class Report:
     def __init__(self, company, month):
+        # Set vars
         self.company = company
         self.month = month
         self.project_dir = Path(__file__).resolve().parents[1]
         self.data_dir = os.path.join(self.project_dir, "data")
+
+        # Get data
         self.dictionary = pd.read_csv(f"{self.data_dir}/dictionary.csv")
+        self.countries = pd.read_csv(f"{self.data_dir}/countries.txt",
+                                     sep="\n", header=None)
+        self.countries.columns = ["Country"]
+        self.cities = pd.read_csv(f"{self.data_dir}/cities.txt",
+                                  sep="\n", header=None)
+        self.cities.columns = ["City"]
 
     def translate(self, word):
         self.result = subprocess.run(
@@ -38,6 +49,18 @@ class Report:
                 self.write = csv.writer(self.f)
                 self.write.writerow([word, self.translation])
             return self.translation
+
+    def get_country(self, location):
+        self.loc = re.split(',| ', location)
+        self.country = [i for i in self.loc if i in self.countries[
+            'Country'].values]
+        if self.country:
+            return self.country[0]
+        elif [i for i in self.loc if i in self.cities['City'].values]:
+            return "United States"
+        else:
+            print(f"Unable to locate: {location}")
+            return input("What country is this?\n> ")
 
     def get_linkedin_report(self):
         self.sheets = {
@@ -115,9 +138,16 @@ class Report:
                 )
 
         #--- LOCATION ---#
-        self.visitors_location = self.visitors_location.sort_values(
-            by="Total views", ascending=False
-        ).iloc[:5]
+        if self.company == config('company2'):
+            self.visitors_location['Location'] = self.visitors_location['Location'].apply(
+                lambda x: self.get_country(x))
+            self.visitors_location = self.visitors_location.groupby(
+                "Location").agg(np.sum).sort_values(
+                    by="Total views", ascending=False).reset_index().iloc[:5]
+        else:
+            self.visitors_location = self.visitors_location.sort_values(
+                by="Total views", ascending=False
+            ).iloc[:5]
         self.visitors_location.insert(1, 'Location (JP)', '')
         self.visitors_location['Location (JP)'] = self.visitors_location['Location'].apply(
             lambda x: self.get_japanese_word(self.dictionary, x)
@@ -165,3 +195,4 @@ class Report:
         print(tabulate(
             self.visitors_jobfunction, headers="keys", showindex=False
         ))
+        print()

@@ -8,6 +8,7 @@ script, company, month = sys.argv
 
 
 def print_report():
+    print("Generating report...")
     report = Report(company, month)
     report.get_linkedin_report()
 
